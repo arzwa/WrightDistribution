@@ -1,8 +1,8 @@
 module WrightDistribution
 
-using QuadGK, Parameters, Reexport
+using QuadGK, Parameters, Reexport, LogExpFunctions
 @reexport using Distributions
-export Wright, sfs
+export Wright, sfs, expectedpq, Epq
 
 """
     Wright(Ne, α, β, sa, sb)
@@ -43,6 +43,8 @@ function Distributions.var(d::Wright; kwargs...)
     #         = E[p]E[q] - E[pq]  
 end
 
+Epq(d::Wright; kwargs...) = expectedpq(d; kwargs...)
+
 function expectedpq(d::Wright; kwargs...)
 	@unpack sa, sb, Ne, A, B, Z = d
     N, _ = quadgk(p -> p^A * (1-p)^B * Cfun(p, Ne, sa, sb), 0., 1.)
@@ -55,6 +57,14 @@ end
 
 function Distributions.logpdf(d::Wright, p) 
     (d.A-1)*log(p) + (d.B-1)*log(1-p) - d.Ne*p*(2d.sa + d.sb*(2-p)) - log(d.Z)
+end
+
+function unnormpdf(d::Wright, p)
+    p^(d.A-1) * (1-p)^(d.B-1) * Cfun(p, d.Ne, d.sa, d.sb)
+end
+
+function unnormlogpdf(d::Wright, p)
+    (d.A-1)*log(p) + (d.B-1)*log(1-p) - d.Ne*p*(2d.sa + d.sb*(2-p))
 end
 
 function sfs(d::Wright, bins; kwargs...)
@@ -100,12 +110,16 @@ end
 # x to 1 integral
 function Z1fun(d, x; kwargs...)
 	@unpack sa, sb, Ne, A, B = d
+    #la = B * log(1-x) + (A-1)*log(x) + logCfun(x, Ne, sa, sb)
+    #b, _ = quadgk(p->((1-p)^B)*gpfun(p, A, Ne, sa, sb), x, 1; kwargs...)
+    #logsumexp(la, log(b))
     a = (1/B)*(1-x)^B*x^(A-1)*Cfun(x, Ne, sa, sb)
     b, _ = quadgk(p->(((1-p)^B)/B)*gpfun(p, A, Ne, sa, sb), x, 1; kwargs...)
     return a + b
 end
 
 Cfun(p, N, sa, sb) = exp(-N*p*(2sa + sb*(2-p)))
+logCfun(p, N, sa, sb) = -N*p*(2sa + sb*(2-p))
 
 function fpfun(p, B, N, sa, sb)
     -(1-p)^(B-1)*(N * (-p*sb + 2sa + sb*(2-p)) + (B-1)/(1-p)) * Cfun(p, N, sa, sb) 
